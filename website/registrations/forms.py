@@ -53,7 +53,7 @@ class MemberRegistrationForm(BaseRegistrationForm):
     class Meta:
         model = Registration
         fields = '__all__'
-        exclude = ['created_at', 'updated_at', 'status', 'username',
+        exclude = ['created_at', 'updated_at', 'processed', 'username',
                    'payment', 'membership']
 
 
@@ -68,7 +68,7 @@ class BenefactorRegistrationForm(BaseRegistrationForm):
     class Meta:
         model = Registration
         fields = '__all__'
-        exclude = ['created_at', 'updated_at', 'status', 'username',
+        exclude = ['created_at', 'updated_at', 'processed', 'username',
                    'starting_year', 'programme', 'payment', 'membership']
 
 
@@ -93,7 +93,7 @@ class RenewalForm(forms.ModelForm):
     class Meta:
         model = Renewal
         fields = '__all__'
-        exclude = ['created_at', 'updated_at', 'status',
+        exclude = ['created_at', 'updated_at', 'processed',
                    'payment', 'membership']
 
 

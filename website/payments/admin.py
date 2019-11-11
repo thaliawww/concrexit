@@ -17,7 +17,7 @@ from django.utils.translation import ugettext_lazy as _
 from members.models import Member
 from payments import services, admin_views
 from payments.forms import BankAccountAdminForm
-from .models import Payment, BankAccount
+from .models import Payment, BankAccount, Batch
 
 
 def _show_message(admin: ModelAdmin, request: HttpRequest,
@@ -36,15 +36,15 @@ class PaymentAdmin(admin.ModelAdmin):
     """Manage the payments"""
 
     list_display = ('created_at', 'amount',  'processing_date', 'type',
-                    'paid_by_link', 'processed_by_link', 'notes')
+                    'paid_by_link', 'processed_by_link', 'in_batch', 'notes')
     list_filter = ('type',)
     list_select_related = ('paid_by', 'processed_by',)
     date_hierarchy = 'created_at'
     fields = ('created_at', 'amount', 'type', 'processing_date',
-              'paid_by', 'processed_by', 'notes')
+              'paid_by', 'processed_by', 'notes', 'batch')
     readonly_fields = ('created_at', 'amount', 'type',
                        'processing_date', 'paid_by', 'processed_by',
-                       'notes')
+                       'notes', 'batch')
     search_fields = ('notes', 'paid_by__username', 'paid_by__first_name',
                      'paid_by__last_name', 'processed_by__username',
                      'processed_by__first_name', 'processed_by__last_name',
@@ -91,7 +91,11 @@ class PaymentAdmin(admin.ModelAdmin):
 
     def get_readonly_fields(self, request: HttpRequest, obj: Payment = None):
         if not obj:
-            return 'created_at', 'type', 'processing_date', 'processed_by'
+            return 'created_at', 'type', 'processing_date', 'processed_by', \
+                   'batch'
+        if obj.type == Payment.TPAY:
+            return 'created_at', 'amount', 'type', 'processing_date', \
+                   'paid_by', 'processed_by', 'notes'
         return super().get_readonly_fields(request, obj)
 
     def get_actions(self, request: HttpRequest) -> OrderedDict:
@@ -228,6 +232,58 @@ class ValidAccountFilter(admin.SimpleListFilter):
             return queryset.filter(valid_from=None)
 
         return queryset
+
+
+class PaymentsInline(admin.TabularInline):
+    """The inline for payments in the Batch admin"""
+    model = Payment
+    fields = ('amount', 'processing_date', 'paid_by',)
+    readonly_fields = ('amount', 'processing_date', 'paid_by',)
+    extra = 0
+
+
+@admin.register(Batch)
+class BatchAdmin(admin.ModelAdmin):
+    inlines = (PaymentsInline, )
+    list_display = ('description', 'start_date', 'end_date', 'processing_date',
+                    'processed',)
+    fields = ('description', 'processed', 'processing_date', 'total_amount',)
+
+    def get_readonly_fields(self, request: HttpRequest, obj: Batch = None):
+        default_fields = ('processed', 'processing_date', 'total_amount',)
+        if obj and obj.processed:
+            return ('description', ) + default_fields
+        return default_fields
+
+    def get_urls(self) -> list:
+        urls = super().get_urls()
+        custom_urls = [
+            path('<uuid:pk>/process/',
+                 self.admin_site.admin_view(
+                     admin_views.BatchAdminView.as_view()),
+                 name='payments_batch_process'),
+            path('<uuid:pk>/export/',
+                 self.admin_site.admin_view(
+                     admin_views.BatchExportAdminView.as_view()),
+                 name='payments_batch_export'),
+        ]
+        return custom_urls + urls
+
+    def changeform_view(self, request: HttpRequest, object_id: str = None,
+                        form_url: str = '', extra_context: dict = None
+                        ) -> HttpResponse:
+        """
+        Renders the change formview
+        Only allow when the payment has not been processed yet
+        """
+        obj = None
+        if (object_id is not None and
+                request.user.has_perm('payments.process_batches')):
+            obj = Batch.objects.get(id=object_id)
+            if obj.processed:
+                obj = None
+        return super().changeform_view(
+            request, object_id, form_url, {'batch': obj})
 
 
 @admin.register(BankAccount)
