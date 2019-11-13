@@ -52,7 +52,8 @@ class PaymentAdmin(admin.ModelAdmin):
     ordering = ('-created_at', 'processing_date')
     autocomplete_fields = ('paid_by', 'processed_by')
     actions = ['process_cash_selected', 'process_card_selected',
-               'process_tpay_selected', 'process_wire_selected', 'export_csv']
+               'process_tpay_selected', 'process_wire_selected',
+               'add_to_batch', 'export_csv']
 
     @staticmethod
     def _member_link(member: Member) -> str:
@@ -152,6 +153,26 @@ class PaymentAdmin(admin.ModelAdmin):
             self._process_feedback(request, updated_payments)
     process_wire_selected.short_description = _(
         'Process selected payments (wire)')
+
+    def add_to_batch(self, request: HttpRequest,
+                     queryset: QuerySet) -> None:
+        """Add selected TPAY payments to a new batch"""
+        if request.user.has_perm('payments.process_batches'):
+            tpays = queryset.filter(type=Payment.TPAY)
+            if len(tpays) > 0:
+                batch = Batch()
+                batch.save()
+                tpays.update(batch=batch)
+            _show_message(
+                self, request,
+                len(tpays),
+                f"Successfully added {len(tpays)} payments to new batch",
+                f"No payments using Thalia Pay are selected, "
+                f"no batch is created"
+            )
+    add_to_batch.short_descriptionn = _(
+        "Add selected TPAY payments to a new batch")
+
 
     def _process_feedback(self, request, updated_payments: list) -> None:
         """Show a feedback message for the processing result"""

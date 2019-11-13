@@ -76,7 +76,7 @@ class Payment(models.Model):
         'Batch',
         models.PROTECT,
         related_name='payments_set',
-        blank=False,
+        blank=True,
         null=True,
     )
 
@@ -97,6 +97,11 @@ class Payment(models.Model):
         elif self.type == self.NONE:
             self.processing_date = None
         super().save(force_insert, force_update, using, update_fields)
+
+    def clean(self):
+        if self.type != self.TPAY and self.batch is not None:
+            return ValidationError({'batch': "Non Thalia Pay payments cannot "
+                                             "be added to a batch."})
 
     def get_admin_url(self):
         content_type = ContentType.objects.get_for_model(self.__class__)
@@ -155,6 +160,10 @@ class Batch(models.Model):
     @property
     def total_amount(self) -> Decimal:
         return sum([payment.amount for payment in self.payments_set.all()])
+
+    def __str__(self):
+        return f"{self.description} " \
+               f"({'processed' if self.processed else 'not processed'})"
 
 
 class BankAccount(models.Model):
