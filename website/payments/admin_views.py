@@ -1,5 +1,6 @@
 """Admin views provided by the payments package"""
 import csv
+import datetime
 
 from django.contrib import messages
 from django.contrib.admin.utils import model_ngettext
@@ -108,3 +109,29 @@ class BatchExportAdminView(View):
                 bankaccount.valid_from
             ])
         return response
+
+
+@method_decorator(staff_member_required, name='dispatch')
+@method_decorator(permission_required('payments.process_batches'),
+                  name='dispatch', )
+class BatchNewFilledAdminView(View):
+    """
+    View tht exports a batch
+    """
+    def get(self, request, *args, **kwargs):
+        batch = Batch()
+        batch.save()
+
+        now = datetime.datetime.utcnow()
+        last_month_start = (datetime.datetime(now.year, now.month, 1) - datetime.timedelta(days=1)).replace(day=1)
+        last_month_end = datetime.datetime(now.year, now.month, 1, 23, 59) - datetime.timedelta(days=1)
+        payments = Payment.objects.filter(
+            type=Payment.TPAY,
+            batch=None,
+            processing_date__gte=last_month_start,
+            # processing_date__lte=last_month_end,
+        )
+
+        payments.update(batch=batch)
+
+        return redirect('admin:payments_batch_change', object_id=batch.id)

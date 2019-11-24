@@ -86,10 +86,6 @@ class Payment(models.Model):
     def processed(self):
         return self.type != self.NONE
 
-    @property
-    def in_batch(self):
-        return self.batch is not None
-
     def save(self, force_insert=False, force_update=False, using=None,
              update_fields=None):
         if self.type != self.NONE and not self.processing_date:
@@ -120,8 +116,10 @@ class Payment(models.Model):
 
 
 def _default_batch_description():
-    return f"your Thalia payments for {datetime.datetime.now().year}-" \
-           f"{datetime.datetime.now().month}"
+    now = datetime.datetime.utcnow()
+    last_month = datetime.datetime(now.year, now.month, 1) \
+                 - datetime.timedelta(days=1)
+    return f"your Thalia payments for {last_month.year}-{last_month.month}"
 
 
 class Batch(models.Model):
@@ -148,6 +146,9 @@ class Batch(models.Model):
         if self.processed and not self.processing_date:
             self.processing_date = timezone.now()
         super().save(force_insert, force_update, using, update_fields)
+
+    def get_absolute_url(self):
+        return reverse('admin:payments_batch_change', args=[str(self.pk)])
 
     @property
     def start_date(self) -> datetime.datetime:
